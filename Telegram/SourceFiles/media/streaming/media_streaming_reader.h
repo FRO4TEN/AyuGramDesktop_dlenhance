@@ -84,7 +84,7 @@ public:
 	~Reader();
 
 private:
-	static constexpr auto kLoadFromRemoteMax = 8;
+	static constexpr auto kLoadFromRemoteMax = 32;
 
 	struct CacheHelper;
 

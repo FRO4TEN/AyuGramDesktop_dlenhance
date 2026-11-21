@@ -32,6 +32,10 @@ constexpr auto kMaxTrackedSuccesses = kRetryAddSessionSuccesses
 constexpr auto kRemoveSessionAfterTimeouts = 4;
 constexpr auto kResetDownloadPrioritiesTimeout = crl::time(200);
 constexpr auto kBadRequestDurationThreshold = 8 * crl::time(1000);
+constexpr auto kSessionDurationSamples = 8;
+constexpr auto kSlowSessionRatio = 3;
+constexpr auto kSlowSessionMinPartDuration = crl::time(300);
+constexpr auto kSlowSessionResetCooldown = 30 * crl::time(1000);
 
 // Each (session remove by timeouts) we wait for time:
 // kRetryAddSessionTimeout * max(removesCount, kMaxTrackedSessionRemoves)
@@ -180,17 +184,24 @@ void DownloadManagerMtproto::checkSendNextAfterSuccess(MTP::DcId dcId) {
 bool DownloadManagerMtproto::trySendNextPart(MTP::DcId dcId, Queue &queue) {
 	const auto &balanceData = _balanceData[dcId];
 	const auto &sessions = balanceData.sessions;
-	const auto bestIndex = [&] {
-		const auto proj = [](const DcSessionBalanceData &data) {
-			return (data.requested < data.maxWaitedAmount)
-				? data.requested
-				: kMaxWaitedInSession;
-		};
-		const auto j = ranges::min_element(sessions, ranges::less(), proj);
-		return (j->requested + kDownloadPartSize <= j->maxWaitedAmount)
-			? (j - begin(sessions))
-			: -1;
-	}();
+	const auto fallback = FastestPartDuration(sessions);
+	auto bestIndex = -1;
+	auto bestScore = crl::time(0);
+	for (auto i = 0, count = int(sessions.size()); i != count; ++i) {
+		const auto &data = sessions[i];
+		if (data.requested + kDownloadPartSize > data.maxWaitedAmount) {
+			continue;
+		}
+		const auto parts = data.requested / kDownloadPartSize + 1;
+		const auto score = parts * ExpectedPartDuration(data, fallback);
+		if (bestIndex < 0
+			|| score < bestScore
+			|| (score == bestScore
+				&& data.requested < sessions[bestIndex].requested)) {
+			bestIndex = i;
+			bestScore = score;
+		}
+	}
 	if (bestIndex < 0) {
 		return false;
 	}
@@ -248,6 +259,19 @@ void DownloadManagerMtproto::requestSucceeded(
 		).arg(duration
 		).arg(parts
 		).arg(overloaded ? " (overloaded)" : ""));
+	const auto partDuration = duration / std::max(parts, 1);
+	data.partDuration = data.durationSamples
+		? (data.partDuration * 3 + partDuration) / 4
+		: partDuration;
+	data.durationSamples = std::min(
+		data.durationSamples + 1,
+		kSessionDurationSamples);
+	if (IsSlowSession(dc, index)) {
+		data.lastReset = crl::now();
+		crl::on_main(this, [=] {
+			resetSlowSession(dcId, index);
+		});
+	}
 	if (overloaded) {
 		return;
 	}
@@ -358,6 +382,75 @@ void DownloadManagerMtproto::removeSession(MTP::DcId dcId) {
 	api().instance().killSession(MTP::downloadDcId(dcId, index));
 
 	dc.lastSessionRemove = crl::now();
+}
+
+crl::time DownloadManagerMtproto::FastestPartDuration(
+		const std::vector<DcSessionBalanceData> &sessions) {
+	auto result = crl::time(0);
+	for (const auto &data : sessions) {
+		if (data.durationSamples > 0
+			&& (!result || data.partDuration < result)) {
+			result = data.partDuration;
+		}
+	}
+	return std::max(result, crl::time(1));
+}
+
+crl::time DownloadManagerMtproto::ExpectedPartDuration(
+		const DcSessionBalanceData &data,
+		crl::time fallback) {
+	return (data.durationSamples > 0)
+		? std::max(data.partDuration, crl::time(1))
+		: fallback;
+}
+
+bool DownloadManagerMtproto::IsSlowSession(
+		const DcBalanceData &dc,
+		int index) {
+	const auto &data = dc.sessions[index];
+	if (data.durationSamples < kSessionDurationSamples
+		|| data.partDuration < kSlowSessionMinPartDuration
+		|| (data.lastReset
+			&& crl::now() < data.lastReset + kSlowSessionResetCooldown)) {
+		return false;
+	}
+	auto others = std::vector<crl::time>();
+	for (auto i = 0, count = int(dc.sessions.size()); i != count; ++i) {
+		const auto &session = dc.sessions[i];
+		if (i != index && session.durationSamples >= kSessionDurationSamples) {
+			others.push_back(session.partDuration);
+		}
+	}
+	if (others.empty()) {
+		return false;
+	}
+	const auto middle = begin(others) + (others.size() / 2);
+	std::nth_element(begin(others), middle, end(others));
+	return (data.partDuration > *middle * kSlowSessionRatio);
+}
+
+void DownloadManagerMtproto::resetSlowSession(MTP::DcId dcId, int index) {
+	const auto i = _balanceData.find(dcId);
+	if (i == end(_balanceData) || index >= i->second.sessions.size()) {
+		return;
+	}
+	auto &dc = i->second;
+	DEBUG_LOG(("Download (%1,%2) session is slow, resetting."
+		).arg(dcId
+		).arg(index));
+	auto &queue = _queues[dcId];
+	const auto blocked = kMaxWaitedInSession * kMaxSessionsCount;
+
+	// Make sure we don't send anything to that session while redirecting.
+	dc.sessions[index].requested += blocked;
+	queue.removeSession(index);
+	Assert(dc.sessions[index].requested == blocked);
+
+	api().instance().killSession(MTP::downloadDcId(dcId, index));
+	const auto lastReset = dc.sessions[index].lastReset;
+	dc.sessions[index] = DcSessionBalanceData();
+	dc.sessions[index].lastReset = lastReset;
+	checkSendNext(dcId, queue);
 }
 
 void DownloadManagerMtproto::killSessionsSchedule(MTP::DcId dcId) {
@@ -494,7 +587,7 @@ void DownloadMtprotoTask::removeSession(int sessionIndex) {
 	for (auto &[requestData, bytes] : _cdnUncheckedParts) {
 		if (requestData.sessionIndex == sessionIndex) {
 			const auto newIndex = _owner->chooseSessionIndex(dcId());
-			Assert(newIndex < sessionIndex);
+			Assert(newIndex != sessionIndex);
 			requestData.sessionIndex = newIndex;
 		}
 	}
@@ -503,7 +596,7 @@ void DownloadMtprotoTask::removeSession(int sessionIndex) {
 		cancelRequest(requestId);
 		if (needMakeRequest) {
 			const auto newIndex = _owner->chooseSessionIndex(dcId());
-			Assert(newIndex < sessionIndex);
+			Assert(newIndex != sessionIndex);
 			makeRequest({ offset, newIndex });
 		}
 	}

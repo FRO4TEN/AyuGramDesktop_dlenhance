@@ -23,9 +23,9 @@ constexpr auto kMaxOnlyInHeader = 80 * kPartSize;
 constexpr auto kPartsOutsideFirstSliceGood = 8;
 constexpr auto kSlicesInMemory = 2;
 
-// 1 MB of parts are requested from cloud ahead of reading demand.
-constexpr auto kPreloadPartsAhead = 8;
-constexpr auto kDownloaderRequestsLimit = 4;
+// 4 MB of parts are requested from cloud ahead of reading demand.
+constexpr auto kPreloadPartsAhead = 32;
+constexpr auto kDownloaderRequestsLimit = 16;
 
 using PartsMap = base::flat_map<uint32, QByteArray>;
 

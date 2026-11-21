@@ -88,6 +88,9 @@ private:
 		int requested = 0;
 		int successes = 0; // Since last timeout in this dc in any session.
 		int maxWaitedAmount = 0;
+		int durationSamples = 0;
+		crl::time partDuration = 0;
+		crl::time lastReset = 0;
 	};
 	struct DcBalanceData {
 		DcBalanceData();
@@ -112,6 +115,16 @@ private:
 	void resetGeneration();
 	void sessionTimedOut(MTP::DcId dcId, int index);
 	void removeSession(MTP::DcId dcId);
+
+	[[nodiscard]] static crl::time FastestPartDuration(
+		const std::vector<DcSessionBalanceData> &sessions);
+	[[nodiscard]] static crl::time ExpectedPartDuration(
+		const DcSessionBalanceData &data,
+		crl::time fallback);
+	[[nodiscard]] static bool IsSlowSession(
+		const DcBalanceData &dc,
+		int index);
+	void resetSlowSession(MTP::DcId dcId, int index);
 
 	const not_null<ApiWrap*> _api;
 
