@@ -921,7 +921,7 @@ void MainWindow::updateTitle() {
 		: Dialogs::Key();
 	const auto thread = key ? key.thread() : nullptr;
 	if (!thread) {
-		setTitle((user.isEmpty() ? u"AyuGram"_q : user) + added + suffix);
+		setTitle((user.isEmpty() ? u"AyuGramEnhanced"_q : user) + added + suffix);
 		return;
 	}
 	const auto history = thread->owningHistory();
@@ -941,7 +941,7 @@ void MainWindow::updateTitle() {
 		: !added.isEmpty()
 		? u" \u2013"_q
 		: QString();
-	setTitle(primary + middle + added + suffix);
+	setTitle(primary + middle + added + u" \u2013 AyuGramEnhanced"_q + suffix);
 }
 
 QRect MainWindow::computeDesktopRect() const {
