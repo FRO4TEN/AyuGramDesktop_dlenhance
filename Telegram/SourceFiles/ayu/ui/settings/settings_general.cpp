@@ -154,11 +154,83 @@ void BuildShowPeerId(SectionBuilder &builder) {
 	});
 }
 
+void BuildDownloadSpeed(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	auto *settings = &AyuSettings::getInstance();
+
+	builder.addSubsectionTitle(tr::ayu_DownloadSpeedHeader());
+
+	const auto keepAlive = std::vector{ 15, 30, 60, 120, 300 };
+	ayu.addSlider({
+		.id = u"ayu/downloadKeepAlive"_q,
+		.title = tr::ayu_DownloadKeepAlive(),
+		.steps = int(keepAlive.size()),
+		.current = settings->downloadKeepAliveSeconds(),
+		.indexToValue = [=](int index) { return keepAlive[index]; },
+		.onFinalChanged = [](int value) {
+			AyuSettings::getInstance().setDownloadKeepAliveSeconds(value);
+		},
+		.formatLabel = [](int value) {
+			return QString::number(value) + u"s"_q;
+		},
+	});
+
+	const auto partSizes = std::vector{ 128, 256, 512, 1024 };
+	ayu.addSlider({
+		.id = u"ayu/downloadPartSize"_q,
+		.title = tr::ayu_DownloadPartSize(),
+		.steps = int(partSizes.size()),
+		.current = settings->downloadPartSizeKb(),
+		.indexToValue = [=](int index) { return partSizes[index]; },
+		.onFinalChanged = [](int value) {
+			AyuSettings::getInstance().setDownloadPartSizeKb(value);
+		},
+		.formatLabel = [](int value) {
+			return QString::number(value) + u"K"_q;
+		},
+	});
+
+	ayu.addSlider({
+		.id = u"ayu/mediaPrefetchScreens"_q,
+		.title = tr::ayu_MediaPrefetchScreens(),
+		.steps = 5,
+		.current = settings->mediaPrefetchScreens(),
+		.indexToValue = [](int index) { return index; },
+		.onFinalChanged = [](int value) {
+			AyuSettings::getInstance().setMediaPrefetchScreens(value);
+		},
+		.formatLabel = [](int value) {
+			return value
+				? QString::number(value)
+				: tr::ayu_MediaPrefetchOff(tr::now);
+		},
+	});
+
+	ayu.addSlider({
+		.id = u"ayu/mediaViewerPreload"_q,
+		.title = tr::ayu_MediaViewerPreload(),
+		.steps = 10,
+		.current = settings->mediaViewerPreloadCount(),
+		.indexToValue = [](int index) { return index + 1; },
+		.onFinalChanged = [](int value) {
+			AyuSettings::getInstance().setMediaViewerPreloadCount(value);
+		},
+		.formatLabel = [](int value) {
+			return QString::number(value);
+		},
+	});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_DownloadSpeedDescription());
+	builder.addSkip();
+}
+
 void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	auto *settings = &AyuSettings::getInstance();
 
 	BuildTranslator(builder, ayu);
 	ayu.addSectionDivider();
+
+	BuildDownloadSpeed(builder, ayu);
 
 	builder.addSubsectionTitle(tr::ayu_CategoryGeneral());
 

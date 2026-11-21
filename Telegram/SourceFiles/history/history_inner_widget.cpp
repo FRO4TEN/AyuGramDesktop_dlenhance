@@ -139,6 +139,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "ayu/features/filters/filters_cache_controller.h"
+#include "ayu/features/media_prefetch/media_prefetch.h"
 #include "ayu/ui/context_menu/context_menu.h"
 #include "ayu/ui/settings/filters/edit_filter.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -424,6 +425,31 @@ HistoryInner::HistoryInner(
 	Assert(_theme != nullptr);
 
 	setAttribute(Qt::WA_AcceptTouchEvents);
+
+	_ayuPrefetch = std::make_unique<AyuFeatures::MediaPrefetch>([=](
+			int screens) {
+		auto result = std::vector<not_null<HistoryItem*>>();
+		const auto top = _visibleAreaTop;
+		const auto bottom = _visibleAreaBottom;
+		const auto extent = (bottom - top) * screens;
+		if (extent <= 0) {
+			return result;
+		}
+		const auto restore = gsl::finally([&] {
+			_visibleAreaTop = top;
+			_visibleAreaBottom = bottom;
+		});
+		_visibleAreaTop = std::max(top - extent, 0);
+		_visibleAreaBottom = bottom + extent;
+		enumerateItems<EnumItemsDirection::TopToBottom>([&](
+				not_null<Element*> view,
+				int,
+				int) {
+			result.push_back(view->data());
+			return true;
+		});
+		return result;
+	});
 
 	refreshAboutView();
 
@@ -4671,6 +4697,7 @@ void HistoryInner::visibleAreaUpdated(int top, int bottom) {
 	_visibleAreaBottom = bottom;
 	markReadMetricsStale();
 	registerReadMetricsActivity();
+	_ayuPrefetch->schedule();
 	const auto visibleAreaHeight = bottom - top;
 
 	// if history has pending resize events we should not update scrollTopItem

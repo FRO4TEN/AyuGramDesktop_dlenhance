@@ -205,7 +205,6 @@ using RecognitionCacheMap = base::flat_map<RecognitionId, RecognitionResult>;
 	return std::nullopt;
 }
 
-constexpr auto kPreloadCount = 3;
 constexpr auto kMaxZoomLevel = 7; // x8
 constexpr auto kZoomToScreenLevel = 1024;
 constexpr auto kPinchZoomStep = 0.25;
@@ -7960,8 +7959,9 @@ void OverlayWidget::preloadData(int delta) {
 	if (!_index) {
 		return;
 	}
+	const auto preload = AyuSettings::getInstance().mediaViewerPreloadCount();
 	auto from = *_index + (delta ? -delta : -1);
-	auto till = *_index + (delta ? delta * kPreloadCount : 1);
+	auto till = *_index + (delta ? delta * preload : 1);
 	if (from > till) std::swap(from, till);
 
 	auto photos = base::flat_set<std::shared_ptr<Data::PhotoMedia>>();

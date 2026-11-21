@@ -353,6 +353,10 @@ public:
 	[[nodiscard]] int avatarCorners() const { return _avatarCorners.current(); }
 	[[nodiscard]] bool singleCornerRadius() const { return _singleCornerRadius.current(); }
 	[[nodiscard]] bool streamerMode() const { return _streamerMode.current(); }
+	[[nodiscard]] int downloadKeepAliveSeconds() const { return _downloadKeepAliveSeconds.current(); }
+	[[nodiscard]] int downloadPartSizeKb() const { return _downloadPartSizeKb.current(); }
+	[[nodiscard]] int mediaPrefetchScreens() const { return _mediaPrefetchScreens.current(); }
+	[[nodiscard]] int mediaViewerPreloadCount() const { return _mediaViewerPreloadCount.current(); }
 
 	void setSaveDeletedMessages(bool val);
 	void setSaveMessagesHistory(bool val);
@@ -440,6 +444,10 @@ public:
 	void setAvatarCorners(int val);
 	void setSingleCornerRadius(bool val);
 	void setStreamerMode(bool val);
+	void setDownloadKeepAliveSeconds(int val);
+	void setDownloadPartSizeKb(int val);
+	void setMediaPrefetchScreens(int val);
+	void setMediaViewerPreloadCount(int val);
 
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeValue() const { return _useGlobalGhostMode.value(); }
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeChanges() const { return _useGlobalGhostMode.changes(); }
@@ -711,6 +719,10 @@ private:
 	rpl::variable<int> _avatarCorners = 23;
 	rpl::variable<bool> _singleCornerRadius = false;
 	rpl::variable<bool> _streamerMode = false;
+	rpl::variable<int> _downloadKeepAliveSeconds = 60;
+	rpl::variable<int> _downloadPartSizeKb = 512;
+	rpl::variable<int> _mediaPrefetchScreens = 1;
+	rpl::variable<int> _mediaViewerPreloadCount = 5;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;

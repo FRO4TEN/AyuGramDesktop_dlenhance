@@ -19,10 +19,7 @@ class Error;
 
 namespace Storage {
 
-// Different part sizes are not supported for now :(
-// Because we start downloading with some part size
-// and then we get a CDN-redirect where we support only
-// fixed part size download for hash checking.
+// Larger parts are verified against CDN hashes one hash chunk at a time.
 constexpr auto kDownloadPartSize = 128 * 1024;
 
 class DownloadMtprotoTask;
@@ -53,7 +50,8 @@ public:
 		MTP::DcId dcId,
 		int index,
 		int amountAtRequestStart,
-		crl::time timeAtRequestStart);
+		crl::time timeAtRequestStart,
+		int partSize);
 	void checkSendNextAfterSuccess(MTP::DcId dcId);
 	[[nodiscard]] int chooseSessionIndex(MTP::DcId dcId) const;
 
@@ -168,6 +166,9 @@ public:
 	[[nodiscard]] const Location &location() const;
 
 	[[nodiscard]] virtual bool readyToRequest() const = 0;
+	[[nodiscard]] int partSize() const {
+		return _partSize;
+	}
 	void loadPart(int sessionIndex);
 	void removeSession(int sessionIndex);
 
@@ -184,6 +185,7 @@ protected:
 
 	void addToQueue(int priority = 0);
 	void removeFromQueue();
+	void setPartSize(int size);
 
 	[[nodiscard]] ApiWrap &api() const {
 		return _owner->api();
@@ -273,11 +275,15 @@ private:
 	[[nodiscard]] CheckCdnHashResult checkCdnFileHash(
 		int64 offset,
 		bytes::const_span buffer);
+	[[nodiscard]] int64 firstMissingCdnHashOffset(
+		int64 offset,
+		int64 size) const;
 
 	void subscribeToNonPremiumLimit();
 
 	const not_null<DownloadManagerMtproto*> _owner;
 	const MTP::DcId _dcId = 0;
+	int _partSize = kDownloadPartSize;
 
 	// _location can be changed with an updated file_reference.
 	Location _location;

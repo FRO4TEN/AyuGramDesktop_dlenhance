@@ -73,6 +73,10 @@ namespace Window {
 struct SectionShow;
 } // namespace Window
 
+namespace AyuFeatures {
+class MediaPrefetch;
+} // namespace AyuFeatures
+
 namespace HistoryView {
 
 class AboutView;
@@ -987,6 +991,7 @@ private:
 	int _minHeight = 0;
 	int _visibleTop = 0;
 	int _visibleBottom = 0;
+	std::unique_ptr<AyuFeatures::MediaPrefetch> _ayuPrefetch;
 	Element *_visibleTopItem = nullptr;
 	int _visibleTopFromItem = 0;
 	ScrollTopState _scrollTopState;

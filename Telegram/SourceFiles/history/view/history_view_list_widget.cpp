@@ -108,6 +108,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/features/filters/filters_cache_controller.h"
+#include "ayu/features/media_prefetch/media_prefetch.h"
 #include "ayu/utils/telegram_helpers.h"
 
 
@@ -581,6 +582,20 @@ ListWidget::ListWidget(
 	setAttribute(Qt::WA_AcceptTouchEvents);
 	setMouseTracking(true);
 	setAccessibleName(tr::lng_sr_message_list(tr::now));
+	_ayuPrefetch = std::make_unique<AyuFeatures::MediaPrefetch>([=](
+			int screens) {
+		auto result = std::vector<not_null<HistoryItem*>>();
+		const auto extent = (_visibleBottom - _visibleTop) * screens;
+		if (extent <= 0 || _items.empty()) {
+			return result;
+		}
+		const auto from = findItemIndexByY(std::max(_visibleTop - extent, 0));
+		const auto till = findItemIndexByY(_visibleBottom + extent);
+		for (auto i = std::min(from, till); i <= std::max(from, till); ++i) {
+			result.push_back(_items[i]->data());
+		}
+		return result;
+	});
 	if (const auto scroll = _delegate->listScrollArea()) {
 		scroll->lockWheelDirection();
 		scroll->setCrossAxisWheelProcess([=](
@@ -1548,6 +1563,7 @@ void ListWidget::visibleTopBottomUpdated(
 	_visibleBottom = visibleBottom;
 	markReadMetricsStale();
 	registerReadMetricsActivity();
+	_ayuPrefetch->schedule();
 
 	// Unload userpics.
 	if (_userpics.size() > kClearUserpicsAfter) {

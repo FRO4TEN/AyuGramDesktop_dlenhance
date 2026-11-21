@@ -518,6 +518,14 @@ void AyuSettings::validate() {
 	validateRange(_messageBubbleRadius, 0, 16, defaults._messageBubbleRadius);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_avatarCorners, 0, AyuUiSettings::kMaxAvatarCorners, defaults._avatarCorners);
+	validateRange(_downloadKeepAliveSeconds, 15, 300, defaults._downloadKeepAliveSeconds);
+	validateRange(_downloadPartSizeKb, 128, 1024, defaults._downloadPartSizeKb);
+	if (_downloadPartSizeKb.current() & (_downloadPartSizeKb.current() - 1)) {
+		_downloadPartSizeKb = defaults._downloadPartSizeKb.current();
+		modified = true;
+	}
+	validateRange(_mediaPrefetchScreens, 0, 4, defaults._mediaPrefetchScreens);
+	validateRange(_mediaViewerPreloadCount, 1, 10, defaults._mediaViewerPreloadCount);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
 	auto embeddedTypeValid = (embeddedType == -1) || (embeddedType >= 0 && embeddedType <= 3); // from Window::Theme::EmbeddedType::DayBlue to Window::Theme::EmbeddedType::NightGreen
@@ -1069,6 +1077,30 @@ void AyuSettings::setStreamerMode(bool val) {
 	save();
 }
 
+void AyuSettings::setDownloadKeepAliveSeconds(int val) {
+	if (_downloadKeepAliveSeconds.current() == val) return;
+	_downloadKeepAliveSeconds = val;
+	save();
+}
+
+void AyuSettings::setDownloadPartSizeKb(int val) {
+	if (_downloadPartSizeKb.current() == val) return;
+	_downloadPartSizeKb = val;
+	save();
+}
+
+void AyuSettings::setMediaPrefetchScreens(int val) {
+	if (_mediaPrefetchScreens.current() == val) return;
+	_mediaPrefetchScreens = val;
+	save();
+}
+
+void AyuSettings::setMediaViewerPreloadCount(int val) {
+	if (_mediaViewerPreloadCount.current() == val) return;
+	_mediaViewerPreloadCount = val;
+	save();
+}
+
 void to_json(nlohmann::json &j, const AyuSettings &s) {
 	auto ghostAccounts = nlohmann::json::object();
 	for (const auto &[key, value] : s._ghostAccounts) {
@@ -1165,6 +1197,10 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"avatarCorners", s._avatarCorners.current()},
 		{"singleCornerRadius", s._singleCornerRadius.current()},
 		{"streamerMode", s._streamerMode.current()},
+		{"downloadKeepAliveSeconds", s._downloadKeepAliveSeconds.current()},
+		{"downloadPartSizeKb", s._downloadPartSizeKb.current()},
+		{"mediaPrefetchScreens", s._mediaPrefetchScreens.current()},
+		{"mediaViewerPreloadCount", s._mediaViewerPreloadCount.current()},
 		{"messageShotSettings", s._messageShotSettings}
 	};
 }
@@ -1269,6 +1305,10 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._avatarCorners = j.value("avatarCorners", defaults._avatarCorners.current());
 	s._singleCornerRadius = j.value("singleCornerRadius", defaults._singleCornerRadius.current());
 	s._streamerMode = j.value("streamerMode", defaults._streamerMode.current());
+	s._downloadKeepAliveSeconds = j.value("downloadKeepAliveSeconds", defaults._downloadKeepAliveSeconds.current());
+	s._downloadPartSizeKb = j.value("downloadPartSizeKb", defaults._downloadPartSizeKb.current());
+	s._mediaPrefetchScreens = j.value("mediaPrefetchScreens", defaults._mediaPrefetchScreens.current());
+	s._mediaViewerPreloadCount = j.value("mediaViewerPreloadCount", defaults._mediaViewerPreloadCount.current());
 
 	if (j.contains("messageShotSettings") && j["messageShotSettings"].is_object()) {
 		j["messageShotSettings"].get_to(s._messageShotSettings);

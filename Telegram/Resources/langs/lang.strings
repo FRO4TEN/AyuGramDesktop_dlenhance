@@ -9191,3 +9191,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_AboutText1" = "ToS breaking Telegram client based on {api_link}.";
 "ayu_UpdateAyuGram" = "Update AyuGram";
 "ayu_UtilityRestartRequired" = "The app will close in 5 seconds.";
+"ayu_DownloadSpeedHeader" = "Download acceleration";
+"ayu_DownloadKeepAlive" = "Keep idle download connections";
+"ayu_DownloadPartSize" = "Download part size";
+"ayu_MediaPrefetchScreens" = "Prefetch chat media ahead (screens)";
+"ayu_MediaPrefetchOff" = "Off";
+"ayu_MediaViewerPreload" = "Media viewer preload (items each side)";
+"ayu_DownloadSpeedDescription" = "Keeping connections open avoids reconnecting before media loads. Larger parts need fewer requests for photos and files. Prefetch starts loading previews just outside the visible part of a chat. Changes apply to downloads started afterwards.";

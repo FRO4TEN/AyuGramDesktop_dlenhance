@@ -16,6 +16,28 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtproto_config.h"
 #include "mtproto/mtproto_auth_key.h"
 
+// AyuGram includes
+#include "ayu/ayu_settings.h"
+
+
+namespace {
+
+constexpr auto kMaxDownloadPartSize = 1024 * 1024;
+
+[[nodiscard]] int ChooseDownloadPartSize(int64 loadSize, int64 fullSize) {
+	if (fullSize > 0 && loadSize < fullSize) {
+		return Storage::kDownloadPartSize;
+	}
+	const auto size = AyuSettings::getInstance().downloadPartSizeKb() * 1024;
+	return (size >= Storage::kDownloadPartSize
+		&& size <= kMaxDownloadPartSize
+		&& !(kMaxDownloadPartSize % size))
+		? size
+		: Storage::kDownloadPartSize;
+}
+
+} // namespace
+
 mtpFileLoader::mtpFileLoader(
 	not_null<Main::Session*> session,
 	const StorageFileLocation &location,
@@ -39,6 +61,7 @@ mtpFileLoader::mtpFileLoader(
 	autoLoading,
 	cacheTag)
 , DownloadMtprotoTask(&session->downloader(), location, origin) {
+	setPartSize(ChooseDownloadPartSize(loadSize, fullSize));
 }
 
 mtpFileLoader::mtpFileLoader(
@@ -138,7 +161,7 @@ int64 mtpFileLoader::takeNextRequestOffset() {
 	Expects(readyToRequest());
 
 	const auto result = _nextRequestOffset;
-	_nextRequestOffset += Storage::kDownloadPartSize;
+	_nextRequestOffset += partSize();
 	return result;
 }
 
@@ -188,8 +211,8 @@ void mtpFileLoader::startLoadingWithPartial(const QByteArray &data) {
 	Expects(data.startsWith("partial:"));
 
 	constexpr auto kPrefix = 8;
-	const auto parts = (data.size() - kPrefix) / Storage::kDownloadPartSize;
-	const auto use = parts * int64(Storage::kDownloadPartSize);
+	const auto parts = (data.size() - kPrefix) / partSize();
+	const auto use = parts * int64(partSize());
 	if (use > 0) {
 		_nextRequestOffset = use;
 		feedPart(0, QByteArray::fromRawData(data.data() + kPrefix, use));
