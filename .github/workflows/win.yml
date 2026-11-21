@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 360
 
     env:
-      CONFIG: ${{ inputs.config || 'Debug' }}
+      BUILD_CONFIG: ${{ inputs.config || 'Debug' }}
       PREPARE_PATH: "Telegram/build/prepare/prepare.py"
 
     defaults:
@@ -87,10 +87,10 @@ jobs:
 
           echo "$(sha256sum $TBUILD/$REPO_NAME/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
           echo "$SDK" >> CACHE_KEY.txt
-          echo "$CONFIG" >> CACHE_KEY.txt
+          echo "$BUILD_CONFIG" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
-          if [ "$CONFIG" = "Debug" ]; then
+          if [ "$BUILD_CONFIG" = "Debug" ]; then
             echo "PREPARE_OPTIONS=skip-release" >> $GITHUB_ENV
           else
             echo "PREPARE_OPTIONS=" >> $GITHUB_ENV
@@ -122,8 +122,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ env.LibrariesPath }}
-          key: ${{ runner.OS }}-x64-${{ env.CONFIG }}-libs-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-${{ env.CONFIG }}-libs-
+          key: ${{ runner.OS }}-x64-${{ env.BUILD_CONFIG }}-libs-${{ env.CACHE_KEY }}
+          restore-keys: ${{ runner.OS }}-x64-${{ env.BUILD_CONFIG }}-libs-
 
       - name: Libraries.
         run: |
@@ -141,16 +141,16 @@ jobs:
           call configure.bat x64 ^
           -D TDESKTOP_API_ID=2040 ^
           -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 ^
-          -D CMAKE_CONFIGURATION_TYPES=%CONFIG% ^
+          -D CMAKE_CONFIGURATION_TYPES=%BUILD_CONFIG% ^
           -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON ^
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF
 
-          cmake --build ..\out --config %CONFIG% --parallel
+          cmake --build ..\out --config %BUILD_CONFIG% --parallel
 
       - name: Move artifact.
         run: |
-          set OUT=%TBUILD%\%REPO_NAME%\out\%CONFIG%
+          set OUT=%TBUILD%\%REPO_NAME%\out\%BUILD_CONFIG%
           dir %OUT%\*.exe
           mkdir artifact
           copy %OUT%\*.exe artifact\
@@ -159,6 +159,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         name: Upload artifact.
         with:
-          name: AyuGram-dlenhance-x64-${{ env.CONFIG }}
+          name: AyuGram-dlenhance-x64-${{ env.BUILD_CONFIG }}
           path: artifact\
           retention-days: 7
