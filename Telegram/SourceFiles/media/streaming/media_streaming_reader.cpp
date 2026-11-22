@@ -23,9 +23,12 @@ constexpr auto kMaxOnlyInHeader = 80 * kPartSize;
 constexpr auto kPartsOutsideFirstSliceGood = 8;
 constexpr auto kSlicesInMemory = 2;
 
-// 4 MB of parts are requested from cloud ahead of reading demand.
+// 4 MB ahead for the media viewer and PiP, upstream 1 MB for chat autoplay.
 constexpr auto kPreloadPartsAhead = 32;
 constexpr auto kDownloaderRequestsLimit = 16;
+constexpr auto kChatPreloadParts = 8;
+constexpr auto kChatDownloaderRequestsLimit = 4;
+constexpr auto kDeepPreloadPriority = 2;
 
 using PartsMap = base::flat_map<uint32, QByteArray>;
 
@@ -1071,9 +1074,12 @@ void Reader::pruneDoneDownloaderRequests() {
 }
 
 void Reader::sendDownloaderRequests() {
+	const auto limit = _deepPreload.load(std::memory_order_relaxed)
+		? kDownloaderRequestsLimit
+		: kChatDownloaderRequestsLimit;
 	auto &&offsets = ranges::views::all(
 		_offsetsForDownloader
-	) | ranges::views::take(kDownloaderRequestsLimit);
+	) | ranges::views::take(limit);
 	for (const auto offset : offsets) {
 		if ((!_cacheHelper || !downloaderWaitForCachedSlice(offset))
 			&& _downloaderOffsetsRequested.emplace(offset).second) {
@@ -1130,6 +1136,9 @@ void Reader::setLoaderPriority(int priority) {
 
 void Reader::refreshLoaderPriority() {
 	_loader->setPriority(_streamingActive ? _realPriority : 0);
+	_deepPreload.store(
+		_realPriority >= kDeepPreloadPriority,
+		std::memory_order_relaxed);
 }
 
 bool Reader::isRemoteLoader() const {
@@ -1303,8 +1312,13 @@ Reader::FillState Reader::fillFromSlices(uint32 offset, bytes::span buffer) {
 		putToCache(std::move(result.toCache));
 	}
 	auto checkPriority = true;
+	auto left = _deepPreload.load(std::memory_order_relaxed)
+		? kLoadFromRemoteMax
+		: kChatPreloadParts;
 	for (const auto offset : result.offsetsFromLoader.values()) {
-		if (checkPriority) {
+		if (!left--) {
+			break;
+		} else if (checkPriority) {
 			checkLoadWillBeFirst(offset);
 			checkPriority = false;
 		}

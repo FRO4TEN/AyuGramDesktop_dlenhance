@@ -249,6 +249,7 @@ private:
 	std::atomic<crl::semaphore*> _waiting = nullptr;
 	std::atomic<crl::semaphore*> _sleeping = nullptr;
 	std::atomic<bool> _stopStreamingAsync = false;
+	std::atomic<bool> _deepPreload = false;
 	PriorityQueue _loadingOffsets;
 
 	Slices _slices;
