@@ -83,6 +83,22 @@ jobs:
           Write-Host ('{0:N1} GB -> {1:N1} GB free' -f $before, ((Get-PSDrive C).Free / 1GB))
           exit 0
 
+      - name: Pick a pagefile drive.
+        id: pagefile
+        if: env.BUILD_CONFIG == 'Release'
+        shell: pwsh
+        run: |
+          $root = if (Test-Path 'D:/') { 'D:' } else { 'C:' }
+          "root=$root" >> $env:GITHUB_OUTPUT
+
+      - name: Bigger pagefile for Release compiles.
+        if: env.BUILD_CONFIG == 'Release'
+        uses: al-cheb/configure-pagefile-action@v1.5
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: ${{ steps.pagefile.outputs.root }}
+
       - name: Prepare directories.
         run: |
           mkdir %userprofile%\TBuild\Libraries
@@ -143,7 +159,8 @@ jobs:
           restore-keys: ${{ runner.OS }}-${{ runner.arch }}-third-party-
 
       - name: Libraries cache.
-        uses: actions/cache@v6
+        id: libraries-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.LibrariesPath }}
           key: ${{ runner.OS }}-x64-${{ env.BUILD_CONFIG }}-libs-${{ env.CACHE_KEY }}
@@ -158,6 +175,13 @@ jobs:
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' -o -path '*/src/wallet_engine/*' ')' -type f ')' -o -empty ')' -delete
 
+      - name: Save libraries cache.
+        if: steps.libraries-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.LibrariesPath }}
+          key: ${{ runner.OS }}-x64-${{ env.BUILD_CONFIG }}-libs-${{ env.CACHE_KEY }}
+
       - name: AyuGram Desktop build.
         run: |
           cd %TBUILD%\%REPO_NAME%\Telegram
@@ -170,7 +194,8 @@ jobs:
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON ^
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF
 
-          cmake --build ..\out --config %BUILD_CONFIG% --parallel
+          if "%BUILD_CONFIG%"=="Release" (set JOBS=2) else (set JOBS=)
+          cmake --build ..\out --config %BUILD_CONFIG% --parallel %JOBS%
 
       - name: Move artifact.
         run: |
