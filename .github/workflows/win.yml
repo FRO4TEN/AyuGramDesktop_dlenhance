@@ -45,6 +45,30 @@ jobs:
         shell: cmd
 
     steps:
+      - name: ATL for the pinned MSVC toolset.
+        if: env.BUILD_CONFIG == 'Release'
+        shell: pwsh
+        run: |
+          # Release libraries build breakpad's dump_syms, which needs ATL.
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $vs = & "$installer\vswhere.exe" -latest -property installationPath
+          $tools = "$vs\VC\Tools\MSVC"
+          $pinned = Get-ChildItem $tools -Directory | Where-Object Name -like '14.44.*' | Select-Object -First 1
+          if (-not $pinned) { throw "MSVC 14.44 toolset not found in $tools" }
+          $atl = Join-Path $pinned.FullName 'atlmfc\include\atlbase.h'
+          if (-not (Test-Path $atl)) {
+            $p = Start-Process "$installer\vs_installer.exe" -Wait -PassThru -ArgumentList @('modify', '--installPath', "`"$vs`"", '--add', 'Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL', '--quiet', '--norestart')
+            Write-Host "vs_installer exit code $($p.ExitCode)"
+          }
+          if (-not (Test-Path $atl)) {
+            $donor = Get-ChildItem $tools -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'atlmfc\include\atlbase.h') } | Sort-Object Name -Descending | Select-Object -First 1
+            if (-not $donor) { throw 'No MSVC toolset with ATL available' }
+            Write-Host "Copying ATL from $($donor.Name)"
+            $target = New-Item -ItemType Directory -Force (Join-Path $pinned.FullName 'atlmfc')
+            Copy-Item (Join-Path $donor.FullName 'atlmfc\*') $target.FullName -Recurse -Force
+          }
+          Get-ChildItem $tools -Directory | ForEach-Object { '{0} atl={1}' -f $_.Name, (Test-Path (Join-Path $_.FullName 'atlmfc\include\atlbase.h')) }
+
       - name: Clean up preinstalled software.
         shell: pwsh
         run: |
